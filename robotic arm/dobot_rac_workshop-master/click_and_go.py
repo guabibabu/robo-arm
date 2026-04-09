@@ -54,13 +54,13 @@ from scripts.click_and_go_shared import (
     APP_CONFIG_PATH,
     get_robot_arm_matrix,
     get_tag_to_camera_matrix,
+    is_dobot_target_reachable,
     invert_transform,
     load_app_config,
     load_device_config,
     save_yaml,
     transform_point,
 )
-from scripts.simulated_dobot import inverse_kinematics
 
 
 def ensure_runtime_dependencies():
@@ -97,10 +97,9 @@ def validate_command_point(point_mm, workspace_cfg, target_r_deg):
     if radius > float(workspace_cfg["max_radius_mm"]):
         return False, f"Radius out of range: {radius:.1f} mm"
 
-    try:
-        inverse_kinematics(x, y, z, float(target_r_deg))
-    except ValueError as exc:
-        return False, f"Unreachable target: {exc}"
+    reachable, reason = is_dobot_target_reachable(x, y, z, float(target_r_deg))
+    if not reachable:
+        return False, f"Unreachable target: {reason}"
     return True, ""
 
 
