@@ -13,6 +13,8 @@ Workflow:
 from __future__ import annotations
 
 import threading
+from pathlib import Path
+import sys
 
 import numpy as np
 
@@ -41,6 +43,12 @@ try:
 except ModuleNotFoundError:
     Dobot = None
     _MISSING_DEPENDENCIES.append("pydobotplus")
+
+CURRENT_DIR = Path(__file__).resolve().parent
+for candidate in (CURRENT_DIR, CURRENT_DIR.parent):
+    if (candidate / "scripts").exists() and str(candidate) not in sys.path:
+        sys.path.insert(0, str(candidate))
+        break
 
 from scripts.click_and_go_shared import (
     APP_CONFIG_PATH,
