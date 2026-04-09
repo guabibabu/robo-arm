@@ -60,6 +60,7 @@ from scripts.click_and_go_shared import (
     save_yaml,
     transform_point,
 )
+from scripts.simulated_dobot import inverse_kinematics
 
 
 def ensure_runtime_dependencies():
@@ -79,6 +80,28 @@ def ensure_runtime_dependencies():
             "If you are on macOS, either install `pyrealsense2-macosx` or build the Intel RealSense Python wrapper from source.",
         ]
     raise RuntimeError("\n".join(message_lines))
+
+
+def validate_command_point(point_mm, workspace_cfg, target_r_deg):
+    x, y, z = (float(point_mm[0]), float(point_mm[1]), float(point_mm[2]))
+    radius = float(np.hypot(x, y))
+
+    if z < max(0.0, float(workspace_cfg["z_min_mm"])):
+        return False, f"Z below the tabletop safety floor: {z:.1f} mm"
+    if x < float(workspace_cfg["x_min_mm"]) or x > float(workspace_cfg["x_max_mm"]):
+        return False, f"X out of range: {x:.1f} mm"
+    if y < float(workspace_cfg["y_min_mm"]) or y > float(workspace_cfg["y_max_mm"]):
+        return False, f"Y out of range: {y:.1f} mm"
+    if z > float(workspace_cfg["z_max_mm"]):
+        return False, f"Z out of range: {z:.1f} mm"
+    if radius > float(workspace_cfg["max_radius_mm"]):
+        return False, f"Radius out of range: {radius:.1f} mm"
+
+    try:
+        inverse_kinematics(x, y, z, float(target_r_deg))
+    except ValueError as exc:
+        return False, f"Unreachable target: {exc}"
+    return True, ""
 
 
 def initialize_pipeline(camera_cfg, serial_number=None):
@@ -267,19 +290,7 @@ class ClickAndGoDemo:
         print("=" * 70)
 
     def point_in_workspace(self, point_mm):
-        x, y, z = point_mm
-        cfg = self.workspace_cfg
-        radius = float(np.hypot(x, y))
-
-        if not (cfg["x_min_mm"] <= x <= cfg["x_max_mm"]):
-            return False, f"X out of range: {x:.1f} mm"
-        if not (cfg["y_min_mm"] <= y <= cfg["y_max_mm"]):
-            return False, f"Y out of range: {y:.1f} mm"
-        if not (cfg["z_min_mm"] <= z <= cfg["z_max_mm"]):
-            return False, f"Z out of range: {z:.1f} mm"
-        if radius > cfg["max_radius_mm"]:
-            return False, f"Radius out of range: {radius:.1f} mm"
-        return True, ""
+        return validate_command_point(point_mm, self.workspace_cfg, self.motion_cfg["target_r_deg"])
 
     def queue_move(self, target_point_mm, reason):
         if self.is_busy():
@@ -299,6 +310,9 @@ class ClickAndGoDemo:
         self.set_status(reason)
 
         try:
+            with self.device_lock:
+                if hasattr(self.device, "clear_alarms"):
+                    self.device.clear_alarms()
             with self.device_lock:
                 current_pose = self.device.get_pose()
 
@@ -433,51 +447,74 @@ class ClickAndGoDemo:
         )
 
     def draw_info_panel(self, image):
+        def shorten(text, limit):
+            return text if len(text) <= limit else text[: limit - 3] + "..."
+
+        height, width = image.shape[:2]
+        panel_width = min(310, max(250, width // 2 - 20))
+        panel_x0 = width - panel_width - 14
+        panel_y0 = 12
+
         panel_lines = [
-            "Click-and-Go Demo",
-            "Left click: move to target",
-            "k: calibrate from visible gripper AprilTag",
-            "h: move to safe pose",
-            "c: clear target marker",
-            "q: quit",
-            f"Status: {self.status_message}",
+            "Click-and-Go",
+            f"Calib: {'READY' if self.base_T_camera is not None else 'NOT READY'} | Busy: {'YES' if self.is_busy() else 'NO'}",
+            shorten(f"Status: {self.status_message}", 42),
         ]
 
-        if self.base_T_camera is not None:
-            panel_lines.append("Calibration: READY")
-        else:
-            panel_lines.append("Calibration: NOT READY")
-
-        if self.latest_camera_point is not None:
-            panel_lines.append(
-                "Camera point (mm): "
-                f"{self.latest_camera_point[0]:.1f}, {self.latest_camera_point[1]:.1f}, {self.latest_camera_point[2]:.1f}"
-            )
-        if self.latest_base_point is not None:
-            panel_lines.append(
-                "Base point raw (mm): "
-                f"{self.latest_base_point[0]:.1f}, {self.latest_base_point[1]:.1f}, {self.latest_base_point[2]:.1f}"
-            )
         if self.latest_command_point is not None:
             panel_lines.append(
-                "Base point command (mm): "
+                "Cmd: "
                 f"{self.latest_command_point[0]:.1f}, {self.latest_command_point[1]:.1f}, {self.latest_command_point[2]:.1f}"
             )
+        elif self.latest_base_point is not None:
+            panel_lines.append(
+                "Raw: "
+                f"{self.latest_base_point[0]:.1f}, {self.latest_base_point[1]:.1f}, {self.latest_base_point[2]:.1f}"
+            )
 
-        box_height = 24 * len(panel_lines) + 20
-        cv2.rectangle(image, (10, 10), (630, min(470, box_height)), (0, 0, 0), -1)
-        cv2.rectangle(image, (10, 10), (630, min(470, box_height)), (60, 220, 60), 2)
+        panel_height = 14 + 24 * len(panel_lines)
+        overlay = image.copy()
+        cv2.rectangle(
+            overlay,
+            (panel_x0, panel_y0),
+            (panel_x0 + panel_width, panel_y0 + panel_height),
+            (0, 0, 0),
+            -1,
+        )
+        cv2.addWeighted(overlay, 0.42, image, 0.58, 0, image)
+        cv2.rectangle(
+            image,
+            (panel_x0, panel_y0),
+            (panel_x0 + panel_width, panel_y0 + panel_height),
+            (60, 220, 60),
+            1,
+        )
 
         for index, line in enumerate(panel_lines):
             cv2.putText(
                 image,
                 line,
-                (20, 35 + index * 24),
+                (panel_x0 + 12, panel_y0 + 24 + index * 24),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.58,
+                0.52,
                 (255, 255, 255),
                 1,
             )
+
+        control_text = "click move | k calibrate | h safe | c clear | q quit"
+        footer_y0 = height - 34
+        overlay = image.copy()
+        cv2.rectangle(overlay, (10, footer_y0), (width - 10, height - 10), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.25, image, 0.75, 0, image)
+        cv2.putText(
+            image,
+            control_text,
+            (18, height - 16),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            (255, 255, 255),
+            1,
+        )
 
     def move_to_safe_pose(self):
         safe = self.motion_cfg["safe_pose"]
