@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,10 @@ import numpy as np
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEVICE_CONFIG_PATH = ROOT_DIR / "config" / "device_port.yaml"
 APP_CONFIG_PATH = ROOT_DIR / "config" / "click_and_go.yaml"
+DOBOT_L1_MM = 85.0
+DOBOT_L2_MM = 135.0
+DOBOT_L3_MM = 147.0
+DOBOT_L4_MM = 59.0
 
 DEFAULT_APP_CONFIG = {
     "camera": {
@@ -131,3 +136,34 @@ def get_robot_arm_matrix(pose):
         ],
         dtype=float,
     )
+
+
+def is_dobot_target_reachable(x, y, z, r):
+    del r
+    radial = math.hypot(float(x), float(y))
+    wrist_radius = radial - DOBOT_L4_MM
+    dz = float(z) - DOBOT_L1_MM
+
+    reach_sq = wrist_radius * wrist_radius + dz * dz
+    cos_theta3 = (reach_sq - DOBOT_L2_MM * DOBOT_L2_MM - DOBOT_L3_MM * DOBOT_L3_MM) / (
+        2.0 * DOBOT_L2_MM * DOBOT_L3_MM
+    )
+    if cos_theta3 < -1.0 - 1e-6 or cos_theta3 > 1.0 + 1e-6:
+        return False, f"Target ({x:.1f}, {y:.1f}, {z:.1f}) is outside the reachable workspace."
+
+    cos_theta3 = max(-1.0, min(1.0, cos_theta3))
+    for elbow_sign in (1.0, -1.0):
+        sin_theta3 = elbow_sign * math.sqrt(max(0.0, 1.0 - cos_theta3 * cos_theta3))
+        theta3 = math.atan2(sin_theta3, cos_theta3)
+        theta2 = math.atan2(dz, wrist_radius) - math.atan2(
+            DOBOT_L3_MM * math.sin(theta3), DOBOT_L2_MM + DOBOT_L3_MM * math.cos(theta3)
+        )
+
+        shoulder_z = DOBOT_L1_MM
+        elbow_z = shoulder_z + DOBOT_L2_MM * math.sin(theta2)
+        wrist_z = elbow_z + DOBOT_L3_MM * math.sin(theta2 + theta3)
+        ee_z = wrist_z
+        if min(elbow_z, wrist_z, ee_z) >= -5.0:
+            return True, ""
+
+    return False, f"Target ({x:.1f}, {y:.1f}, {z:.1f}) would drive the arm below the workspace floor."
