@@ -32,7 +32,7 @@ DEFAULT_APP_CONFIG = {
         "x_max_mm": 320.0,
         "y_min_mm": -180.0,
         "y_max_mm": 180.0,
-        "z_min_mm": -10.0,
+        "z_min_mm": 0.0,
         "z_max_mm": 120.0,
         "max_radius_mm": 320.0,
     },
