@@ -1,0 +1,31 @@
+camera:
+  width: 640
+  height: 480
+  fps: 30
+  tag_size_m: 0.0792
+  depth_window_px: 5
+motion:
+  safe_pose:
+    x: 200.0
+    y: 0.0
+    z: 80.0
+    r: 0.0
+  hover_z_mm: 90.0
+  approach_offset_z_mm: 30.0
+  target_offset_z_mm: 15.0
+  target_r_deg: 0.0
+workspace:
+  x_min_mm: 120.0
+  x_max_mm: 320.0
+  y_min_mm: -180.0
+  y_max_mm: 180.0
+  z_min_mm: -10.0
+  z_max_mm: 120.0
+  max_radius_mm: 320.0
+calibration:
+  gripper_T_tag:
+    - [-1.0, 0.0, 0.0, 30.0]
+    - [0.0, 1.0, 0.0, 0.0]
+    - [0.0, 0.0, -1.0, 153.0]
+    - [0.0, 0.0, 0.0, 1.0]
+  base_T_camera: null

@@ -1,0 +1,27 @@
+{
+  "pick": {
+    "name": "Pick",
+    "x": 200.0,
+    "y": 100.0,
+    "z": 0.0,
+    "r": 0.0
+  },
+  "place": {
+    "name": "Place",
+    "x": 200.0,
+    "y": -100.0,
+    "z": 0.0,
+    "r": 0.0
+  },
+  "safe_pose": {
+    "name": "Safe",
+    "x": 200.0,
+    "y": 0.0,
+    "z": 50.0,
+    "r": 0.0
+  },
+  "jump_height_mm": 100.0,
+  "move_delay_s": 2.0,
+  "grip_delay_s": 2.0,
+  "release_delay_s": 2.0
+}
