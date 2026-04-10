@@ -561,7 +561,7 @@ class ClickAndGoDemo:
                 self.draw_click_overlay(color_image)
                 self.draw_info_panel(color_image)
 
-                cv2.imshow(window_name, color_image)
+                cv2.imshow(window_name, color_image) 
                 key = cv2.waitKey(1) & 0xFF
 
                 if key == ord("q"):
