@@ -32,6 +32,7 @@ DEFAULT_APP_CONFIG = {
         "fps": 30,
         "tag_size_m": 0.0792,
         "depth_window_px": 5,
+        "display_scale": 1.5,
     },
     "motion": {
         "safe_pose": {"x": 200.0, "y": 0.0, "z": 80.0, "r": 0.0},
@@ -50,6 +51,7 @@ DEFAULT_APP_CONFIG = {
         "max_radius_mm": 320.0,
     },
     "calibration": {
+        "reuse_saved_base_T_camera": False,
         "gripper_T_tag": [
             [-1.0, 0.0, 0.0, 30.0],
             [0.0, 1.0, 0.0, 0.0],
