@@ -16,6 +16,14 @@ DOBOT_L1_MM = 85.0
 DOBOT_L2_MM = 135.0
 DOBOT_L3_MM = 147.0
 DOBOT_L4_MM = 59.0
+BASE_MIN_DEG = -90.0
+BASE_MAX_DEG = 90.0
+REAR_ARM_MIN_DEG = 0.0
+REAR_ARM_MAX_DEG = 85.0
+FOREARM_MIN_DEG = -10.0
+FOREARM_MAX_DEG = 90.0
+END_EFFECTOR_MIN_DEG = -90.0
+END_EFFECTOR_MAX_DEG = 90.0
 
 DEFAULT_APP_CONFIG = {
     "camera": {
@@ -33,10 +41,10 @@ DEFAULT_APP_CONFIG = {
         "target_r_deg": 0.0,
     },
     "workspace": {
-        "x_min_mm": 120.0,
+        "x_min_mm": 0.0,
         "x_max_mm": 320.0,
-        "y_min_mm": -180.0,
-        "y_max_mm": 180.0,
+        "y_min_mm": -320.0,
+        "y_max_mm": 320.0,
         "z_min_mm": 0.0,
         "z_max_mm": 120.0,
         "max_radius_mm": 320.0,
@@ -138,11 +146,25 @@ def get_robot_arm_matrix(pose):
     )
 
 
+def _shortest_angle_delta_deg(start, end):
+    return ((float(end) - float(start) + 180.0) % 360.0) - 180.0
+
+
 def is_dobot_target_reachable(x, y, z, r):
-    del r
     radial = math.hypot(float(x), float(y))
     wrist_radius = radial - DOBOT_L4_MM
     dz = float(z) - DOBOT_L1_MM
+    base_deg = math.degrees(math.atan2(float(y), float(x)))
+    wrist_yaw_deg = _shortest_angle_delta_deg(base_deg, float(r))
+
+    if base_deg < BASE_MIN_DEG or base_deg > BASE_MAX_DEG:
+        return False, f"Base rotation {base_deg:.1f} deg is outside [{BASE_MIN_DEG:.0f}, {BASE_MAX_DEG:.0f}] deg."
+    if wrist_yaw_deg < END_EFFECTOR_MIN_DEG or wrist_yaw_deg > END_EFFECTOR_MAX_DEG:
+        return (
+            False,
+            f"End-effector rotation {wrist_yaw_deg:.1f} deg is outside "
+            f"[{END_EFFECTOR_MIN_DEG:.0f}, {END_EFFECTOR_MAX_DEG:.0f}] deg.",
+        )
 
     reach_sq = wrist_radius * wrist_radius + dz * dz
     cos_theta3 = (reach_sq - DOBOT_L2_MM * DOBOT_L2_MM - DOBOT_L3_MM * DOBOT_L3_MM) / (
@@ -158,6 +180,13 @@ def is_dobot_target_reachable(x, y, z, r):
         theta2 = math.atan2(dz, wrist_radius) - math.atan2(
             DOBOT_L3_MM * math.sin(theta3), DOBOT_L2_MM + DOBOT_L3_MM * math.cos(theta3)
         )
+
+        rear_arm_deg = math.degrees(theta2)
+        forearm_deg = math.degrees(theta3)
+        if rear_arm_deg < REAR_ARM_MIN_DEG or rear_arm_deg > REAR_ARM_MAX_DEG:
+            continue
+        if forearm_deg < FOREARM_MIN_DEG or forearm_deg > FOREARM_MAX_DEG:
+            continue
 
         shoulder_z = DOBOT_L1_MM
         elbow_z = shoulder_z + DOBOT_L2_MM * math.sin(theta2)
