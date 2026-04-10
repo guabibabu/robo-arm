@@ -1,0 +1,14 @@
+path: .
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 1
+names: ['screws']
+
+roboflow:
+  workspace: ryans-workspace-acjoe
+  project: screw-detection-workshop-wwqil
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/ryans-workspace-acjoe/screw-detection-workshop-wwqil/dataset/3
